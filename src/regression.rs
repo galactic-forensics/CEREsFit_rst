@@ -1,11 +1,9 @@
 /// Module for linear regression calculations.
 
-
 pub mod regression {
     use ndarray::{Array, Ix1};
 
     use crate::{Data, LinearFit};
-
 
     pub fn linear_fit(data: &Data) -> Result<LinearFit, String> {
         // Check input data
@@ -35,7 +33,7 @@ pub mod regression {
         let sigxy = match &data.rho {
             Some(rho) => {
                 let rho = Array::from_vec(rho.clone());
-                rho * sigx * sigy
+                &rho * &sigx * &sigy
             }
             None => Array::zeros(sigx.len()),
         };
@@ -50,30 +48,35 @@ pub mod regression {
         };
 
         // Calculate the slope of the linear fit
+        let slope = [
+            calculate_slope(&xdat, &sigx, &ydat, &sigy, &sigxy, &fixpt)?,
+            0.0,
+        ];
 
-        Err("Nothing is implemented".to_owned())
+        let result = LinearFit {
+            slope,
+            intercept: [0.0, 0.0],
+            mswd: 0.0,
+        };
+
+        Ok(result)
     }
 
     /// Calculate the slope fully considering the uncertainties
     fn calculate_slope(
         xdat: &Array<f64, Ix1>,
-        ydat: &Array<f64, Ix1>,
         sigx: &Array<f64, Ix1>,
+        ydat: &Array<f64, Ix1>,
         sigy: &Array<f64, Ix1>,
         sigxy: &Array<f64, Ix1>,
-        fixpt: &Option<&Array<f64, Ix1>>,
+        fixpt: &Option<Array<f64, Ix1>>,
     ) -> Result<f64, String> {
+        let sigx_sq = sigx * sigx;
+        let sigy_sq = sigy * sigy;
 
-        let weight = | slp: f64 | -> Array<f64, Ix1> {
-            // create a new nalgebra vector and return 1 / sigy**2
-            1.0 / (sigy * sigy + slp * sigx * sigx - 2.0 * slp * sigxy)
-        };
-
-        let xbar = | weights: &Array<f64, Ix1> | -> f64 {
+        let calc_xbar = |weights: &Array<f64, Ix1>| -> f64 {
             match fixpt {
-                Some(f) => {
-                    f.get(0).unwrap().clone()
-                }
+                Some(f) => *f.get(0).unwrap(),
                 None => {
                     let sum_arr = weights * xdat;
                     sum_arr.sum() / weights.sum()
@@ -81,22 +84,59 @@ pub mod regression {
             }
         };
 
-        let iterate_slope = | slp: f64 | -> f64 {
-            slp
+        let calc_ybar = |weights: &Array<f64, Ix1>| -> f64 {
+            match fixpt {
+                Some(f) => *f.get(0).unwrap(),
+                None => {
+                    let sum_arr = weights * ydat;
+                    sum_arr.sum() / weights.sum()
+                }
+            }
         };
 
-        let iter_count: usize = 0;
+        let calc_weights =
+            |slp: f64| -> Array<f64, Ix1> { 1.0 / (&sigy_sq + slp * &sigx_sq - 2.0 * slp * sigxy) };
 
-        let mut slope_old = initial_guesses(&xdat, &ydat)?[0];
+        let iterate_slope = |slp: f64| -> f64 {
+            let weights = calc_weights(slp);
+            let weights_sq = &weights * &weights;
+            let u_all = xdat - calc_xbar(&weights);
+            let v_all = ydat - calc_ybar(&weights);
 
-        Err("Nothing is implemented".to_owned())
+            let nominator = &weights_sq
+                * &v_all
+                * (&u_all * &sigy_sq + slp * &v_all * &sigx_sq - &v_all * sigxy);
+            let denominator = &weights_sq
+                * &u_all
+                * (&u_all * &sigy_sq + slp * &v_all * &sigx_sq - slp * &u_all * sigxy);
+
+            nominator.sum() / denominator.sum()
+        };
+
+        let regression_limit = 1e-10; // fixme: change for Opt in struct
+
+        let mut iter_count: usize = 0;
+        let mut slope_old = initial_guesses_slope(xdat, ydat)?;
+        let mut slope_new = iterate_slope(slope_old);
+
+        while (slope_old - slope_new).abs() > regression_limit {
+            slope_old = slope_new;
+            slope_new = iterate_slope(slope_new);
+            iter_count += 1;
+
+            if iter_count >= 1000000 {
+                // fixme: define somewhere for user
+                return Err("Reached maximum iter count. No slope found.".to_owned());
+            }
+        }
+        Ok(slope_new)
     }
 
     /// Simple linear regression to calculate the slope and intercept of a line.
-    fn initial_guesses(
+    fn initial_guesses_slope(
         xdat: &Array<f64, Ix1>,
-        ydat: &Array<f64, Ix1>
-    ) -> Result<[f64; 2], String> {
+        ydat: &Array<f64, Ix1>,
+    ) -> Result<f64, String> {
         let n = xdat.len();
         if n < 2 {
             return Err("Not enough data points".to_owned());
@@ -112,9 +152,8 @@ pub mod regression {
             .sum::<f64>();
 
         let slope = (n as f64 * sum_xy - sum_x * sum_y) / (n as f64 * sum_x2 - sum_x.powi(2));
-        let intercept = (sum_y - slope * sum_x) / n as f64;
 
-        Ok([slope, intercept])
+        Ok(slope)
     }
 
     fn kronecker_delta(i: Vec<usize>, j: Vec<usize>) -> Vec<usize> {
@@ -135,17 +174,16 @@ pub mod regression {
         fn test_initial_guesses() {
             let xdat = array![1.0, 2.0, 3.0, 4.0, 5.0];
             let ydat = array![2.0, 3.0, 4.0, 5.0, 6.0];
-            let test = initial_guesses(&xdat, &ydat).unwrap();
-            assert_eq!(test, [1.0, 1.0]);
+            let test = initial_guesses_slope(&xdat, &ydat).unwrap();
+            assert_eq!(test, 1.0);
         }
 
         #[test]
         fn test_initial_guesses_approximate() {
             let xdat = array![1.0, 2.0, 3.0, 4.0, 5.0];
             let ydat = array![2.1, 2.9, 4.2, 5.1, 5.7];
-            let test = initial_guesses(&xdat, &ydat).unwrap();
-            assert_relative_eq!(test[0], 0.94);
-            assert_relative_eq!(test[1], 1.18);
+            let test = initial_guesses_slope(&xdat, &ydat).unwrap();
+            assert_relative_eq!(test, 0.94);
         }
 
         #[test]

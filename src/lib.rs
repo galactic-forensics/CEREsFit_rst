@@ -4,6 +4,8 @@ extern crate ndarray as nd;
 
 mod regression;
 
+pub use regression::regression::linear_fit;
+
 /// Data structure.
 ///
 /// In order to perform a linear fit, you must package your data as a `Data` struct. The following
@@ -61,9 +63,9 @@ pub struct Data {
 ///
 /// todo
 pub struct LinearFit {
-    slope: [f64; 2],
-    intercept: [f64; 2],
-    mswd: f64,
+    pub slope: [f64; 2],
+    pub intercept: [f64; 2],
+    pub mswd: f64,
 }
 
 impl fmt::Display for LinearFit {
