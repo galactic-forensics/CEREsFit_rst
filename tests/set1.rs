@@ -1,5 +1,6 @@
 // Integration test for Set 1 data of paper
 
+use approx::assert_relative_eq;
 use ceresfit::{Data, linear_fit};
 
 /// Test of set 1 dataset with correlated error bars, no forced intercept
@@ -27,7 +28,6 @@ fn test_correlated_set1() {
     ];
 
     let slope_exp = [-0.0775157620599649, 0.0];
-    let slope_exp = [-0.0763849664508034, 0.0];
     let intercept_exp = [0.0, 0.0];
     let mswd_exp = 0.0;
 
@@ -36,13 +36,13 @@ fn test_correlated_set1() {
         sigx,
         ydat,
         sigy,
-        rho: None, //  Some(rho),
+        rho:  Some(rho),
         fixpt: None,
     };
 
     let result = linear_fit(&data).unwrap();
 
-    assert_eq!(slope_exp, result.slope);
+    assert_relative_eq!(slope_exp[0], result.slope[0], epsilon = 1e-10);
     assert_eq!(intercept_exp, result.intercept);
     assert_eq!(mswd_exp, result.mswd);
 }

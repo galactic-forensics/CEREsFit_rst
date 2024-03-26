@@ -1,7 +1,8 @@
 /// Module for linear regression calculations.
 
 pub mod regression {
-    use ndarray::{Array, Ix1};
+    use ndarray::prelude::*;
+    use std::ops::Mul;
 
     use crate::{Data, LinearFit};
 
@@ -25,24 +26,21 @@ pub mod regression {
             None => {}
         }
 
-        // Create nalgebra vectors to use in calculations
-        let xdat = Array::from_vec(data.xdat.clone());
-        let sigx = Array::from_vec(data.sigx.clone());
-        let ydat = Array::from_vec(data.ydat.clone());
-        let sigy = Array::from_vec(data.sigy.clone());
+        // Create ndarrays to use in calculations
+        let xdat = Array1::from_vec(data.xdat.clone());
+        let sigx = Array1::from_vec(data.sigx.clone());
+        let ydat = Array1::from_vec(data.ydat.clone());
+        let sigy = Array1::from_vec(data.sigy.clone());
         let sigxy = match &data.rho {
-            Some(rho) => {
-                let rho = Array::from_vec(rho.clone());
-                &rho * &sigx * &sigy
-            }
-            None => Array::zeros(sigx.len()),
+            Some(rho) => Array1::from_vec(rho.clone()) * &sigx * &sigy,
+            None => Array1::zeros(sigx.len()),
         };
         let fixpt = match data.fixpt {
             Some(ref fixpt) => {
                 if fixpt.len() != 2 {
                     return Err("Length of fixpt must be of length 2".to_owned());
                 }
-                Some(Array::from_vec(fixpt.clone()))
+                Some(Array1::from_vec(fixpt.clone()))
             }
             None => None,
         };
@@ -64,38 +62,33 @@ pub mod regression {
 
     /// Calculate the slope fully considering the uncertainties
     fn calculate_slope(
-        xdat: &Array<f64, Ix1>,
-        sigx: &Array<f64, Ix1>,
-        ydat: &Array<f64, Ix1>,
-        sigy: &Array<f64, Ix1>,
-        sigxy: &Array<f64, Ix1>,
+        xdat: &Array1<f64>,
+        sigx: &Array1<f64>,
+        ydat: &Array1<f64>,
+        sigy: &Array1<f64>,
+        sigxy: &Array1<f64>,
         fixpt: &Option<Array<f64, Ix1>>,
     ) -> Result<f64, String> {
-        let sigx_sq = sigx * sigx;
-        let sigy_sq = sigy * sigy;
+        let sigx_sq = sigx.mapv(|x: f64| x.powi(2));
+        let sigy_sq = sigy.mapv(|x: f64| x.powi(2));
 
-        let calc_xbar = |weights: &Array<f64, Ix1>| -> f64 {
+        let calc_xbar = |weights: &Array1<f64>| -> f64 {
             match fixpt {
-                Some(f) => *f.get(0).unwrap(),
-                None => {
-                    let sum_arr = weights * xdat;
-                    sum_arr.sum() / weights.sum()
-                }
+                Some(f) => f[0],
+                None => (weights * xdat).sum() / weights.sum(),
             }
         };
 
-        let calc_ybar = |weights: &Array<f64, Ix1>| -> f64 {
+        let calc_ybar = |weights: &Array1<f64>| -> f64 {
             match fixpt {
-                Some(f) => *f.get(0).unwrap(),
-                None => {
-                    let sum_arr = weights * ydat;
-                    sum_arr.sum() / weights.sum()
-                }
+                Some(f) => f[1],
+                None => (weights * ydat).sum() / weights.sum(),
             }
         };
 
-        let calc_weights =
-            |slp: f64| -> Array<f64, Ix1> { 1.0 / (&sigy_sq + slp * &sigx_sq - 2.0 * slp * sigxy) };
+        let calc_weights = |slp: f64| -> Array1<f64> {
+            1.0 / (&sigy_sq + slp.powi(2) * &sigx_sq - 2.0 * slp * sigxy)
+        };
 
         let iterate_slope = |slp: f64| -> f64 {
             let weights = calc_weights(slp);
@@ -103,17 +96,15 @@ pub mod regression {
             let u_all = xdat - calc_xbar(&weights);
             let v_all = ydat - calc_ybar(&weights);
 
-            let nominator = &weights_sq
-                * &v_all
-                * (&u_all * &sigy_sq + slp * &v_all * &sigx_sq - &v_all * sigxy);
-            let denominator = &weights_sq
-                * &u_all
-                * (&u_all * &sigy_sq + slp * &v_all * &sigx_sq - slp * &u_all * sigxy);
-
-            nominator.sum() / denominator.sum()
+            (&weights_sq * &v_all * (&u_all * &sigy_sq + slp * &v_all * &sigx_sq - &v_all * sigxy))
+                .sum()
+                / (&weights_sq
+                    * &u_all
+                    * (&u_all * &sigy_sq + slp * &v_all * &sigx_sq - slp * &u_all * sigxy))
+                    .sum()
         };
 
-        let regression_limit = 1e-10; // fixme: change for Opt in struct
+        let regression_limit = 0.0; // fixme: change for Opt in struct - maybe
 
         let mut iter_count: usize = 0;
         let mut slope_old = initial_guesses_slope(xdat, ydat)?;
@@ -129,38 +120,27 @@ pub mod regression {
                 return Err("Reached maximum iter count. No slope found.".to_owned());
             }
         }
+
+        println!("Iter count: {}", iter_count);
+
         Ok(slope_new)
     }
 
     /// Simple linear regression to calculate the slope and intercept of a line.
-    fn initial_guesses_slope(
-        xdat: &Array<f64, Ix1>,
-        ydat: &Array<f64, Ix1>,
-    ) -> Result<f64, String> {
+    fn initial_guesses_slope(xdat: &Array1<f64>, ydat: &Array1<f64>) -> Result<f64, String> {
         let n = xdat.len();
         if n < 2 {
             return Err("Not enough data points".to_owned());
         }
 
-        let sum_x = xdat.iter().sum::<f64>();
-        let sum_y = ydat.iter().sum::<f64>();
-        let sum_x2 = xdat.iter().map(|x| x.powi(2)).sum::<f64>();
-        let sum_xy = xdat
-            .iter()
-            .zip(ydat.iter())
-            .map(|(x, y)| x * y)
-            .sum::<f64>();
+        let sum_x = xdat.sum();
+        let sum_y = ydat.sum();
+        let sum_x2 = xdat.mapv(|x: f64| x.powi(2)).sum();
+        let sum_xy = xdat.mul(ydat).sum();
 
         let slope = (n as f64 * sum_xy - sum_x * sum_y) / (n as f64 * sum_x2 - sum_x.powi(2));
 
         Ok(slope)
-    }
-
-    fn kronecker_delta(i: Vec<usize>, j: Vec<usize>) -> Vec<usize> {
-        i.iter()
-            .zip(j.iter())
-            .map(|(a, b)| if a == b { 1 } else { 0 })
-            .collect()
     }
 
     #[cfg(test)]
@@ -186,12 +166,14 @@ pub mod regression {
             assert_relative_eq!(test, 0.94);
         }
 
+        // fixme: remove
         #[test]
-        fn test_kronecker_delta() {
-            let i = vec![1, 2, 3];
-            let j = vec![1, 2, 4];
-            let test = kronecker_delta(i, j);
-            assert_eq!(test, vec![1, 1, 0]);
+        fn test_ndarray_tmp() {
+            let arr = array![1.0, 2.0, 3.0, 3.3];
+            let arr2 = &arr * &arr;
+            let arr3 = arr.mapv(|x: f64| x.powi(2));
+            assert_eq!(arr2, arr3);
+            println!("{}", &arr2[0]);
         }
     }
 }

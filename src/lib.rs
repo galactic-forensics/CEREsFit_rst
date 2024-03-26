@@ -1,6 +1,6 @@
 use std::fmt;
 
-extern crate ndarray as nd;
+extern crate ndarray;
 
 mod regression;
 
