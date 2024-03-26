@@ -1,6 +1,6 @@
-extern crate nalgebra as na;
-
 use std::fmt;
+
+extern crate ndarray as nd;
 
 mod regression;
 
