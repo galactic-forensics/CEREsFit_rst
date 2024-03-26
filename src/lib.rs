@@ -1,4 +1,8 @@
+extern crate nalgebra as na;
+
 use std::fmt;
+
+mod regression;
 
 /// Data structure.
 ///
@@ -72,37 +76,6 @@ impl fmt::Display for LinearFit {
     }
 }
 
-pub fn linear_fit(data: &Data) -> Result<LinearFit, String> {
-    let len_xdat = data.xdat.len();
-    let len_sigx = data.sigx.len();
-    let len_ydat = data.ydat.len();
-    let len_sigy = data.sigy.len();
-    
-    if len_xdat != len_sigx || len_xdat != len_ydat || len_xdat != len_sigy {
-        return Err("Length of xdat, ydat, and/or uncertainties do not match".to_owned());
-    }
-    
-    match data.rho {
-        Some(ref rho) => {
-            if rho.len() != len_xdat {
-                return Err("Length of rho does not match xdat".to_owned());
-            }
-        }
-        None => {}
-    }
-    
-    let fixpt = match data.fixpt {
-        Some(ref fixpt) => {
-            if fixpt.len() != 2 {
-                return Err("Length of fixpt must be of length 2".to_owned());
-            }
-            Some(fixpt)
-        }
-        None => None,
-    };
-    
-    Err("Nothing is implemented".to_owned())
-}
 
 #[cfg(test)]
 mod tests {
