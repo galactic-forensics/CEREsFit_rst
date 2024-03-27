@@ -51,7 +51,8 @@ pub mod regression {
         let intercept = ybar - slope * xbar;
         let mswd = calculate_mswd(&xdat, &ydat, slope, intercept, &weights, &fixpt);
         let [slope_unc, intercept_unc] = match fixpt {
-            Some(_) => [0.0, 0.0],
+            Some(fixpt) => unc_calc_fixpt(
+                &xdat, &sigx, &ydat, &sigy, &sigxy, slope, xbar, ybar, &weights, &fixpt),
             None => unc_calc_no_fixpt(
                 &xdat, &sigx, &ydat, &sigy, &sigxy, slope, xbar, ybar, &weights,
             ),
@@ -129,7 +130,7 @@ pub mod regression {
         };
 
         let regression_limit = 1e-10; // fixme: change for Opt in struct - maybe
-        // fixme: Can set this to zero for some, but not for everything! Check w/ all datasets.
+                                      // fixme: Can set this to zero for some, but not for everything! Check w/ all datasets.
 
         let mut iter_count: usize = 0;
         let mut slope_old = initial_guesses_slope(xdat, ydat)?;
@@ -178,6 +179,75 @@ pub mod regression {
         }
     }
 
+    /// Uncertainty calculation with a fixed point
+    ///
+    fn unc_calc_fixpt(
+        xdat: &Array1<f64>,
+        sigx: &Array1<f64>,
+        ydat: &Array1<f64>,
+        sigy: &Array1<f64>,
+        sigxy: &Array1<f64>,
+        slope: f64,
+        xbar: f64,
+        ybar: f64,
+        weights: &Array1<f64>,
+        fixpt: &Array1<f64>,
+    ) -> [f64; 2] {
+        let u_all = xdat - xbar;
+        let v_all = ydat - ybar;
+
+        let sigx_sq = sigx.mapv(|x: f64| x.powi(2));
+        let sigy_sq = sigy.mapv(|x: f64| x.powi(2));
+        let weights_sq = weights.mapv(|x: f64| x.powi(2));
+        let u_all_sq = u_all.mapv(|x: f64| x.powi(2));
+        let v_all_sq = v_all.mapv(|x: f64| x.powi(2));
+
+        let dthdb = (&weights_sq
+            * (2.0 * slope * (&u_all * &v_all * &sigx_sq - &u_all_sq * sigxy)
+                + (&u_all_sq * &sigy_sq - &v_all_sq * &sigx_sq)))
+            .sum()
+            + 4.0
+                * (weights.mapv(|x: f64| x.powi(3))
+                    * (sigxy - slope * &sigx_sq)
+                    * (slope.powi(2) * (&u_all * &v_all * &sigx_sq - &u_all_sq * sigxy)
+                        + slope * (&u_all_sq * &sigy_sq - &v_all_sq * &sigx_sq)
+                        - (&u_all * &v_all * &sigy_sq - &v_all_sq * sigxy)))
+                    .sum();
+
+        let calc_dtheta_dxi = |it: usize| -> f64 {
+            &weights_sq[it]
+                * (slope.powi(2) * &v_all[it] * &sigx_sq[it]
+                    - slope.powi(2) * 2.0 * &u_all[it] * sigxy[it]
+                    + 2.0 * slope * &u_all[it] * &sigy_sq[it]
+                    - &v_all[it] * &sigy_sq[it])
+        };
+        
+        let calc_dtheta_dyi = |it: usize| -> f64 {
+            &weights_sq[it]
+                * (slope.powi(2) * &u_all[it] * &sigx_sq[it]
+                    - 2.0 * slope * &v_all[it] * &sigx_sq[it]
+                    - &u_all[it] * &sigy_sq[it]
+                    + 2.0 * &v_all[it] * sigxy[it])
+        };
+        
+        let mut slope_unc_sq = 0.0;
+        for (it, sigxi) in sigx.indexed_iter() {
+            let sigyi = sigy[it];
+            let sigxyi = sigxy[it];
+            let dtheta_dxi = calc_dtheta_dxi(it);
+            let dtheta_dyi = calc_dtheta_dyi(it);
+            slope_unc_sq += dtheta_dxi.powi(2) * sigxi.powi(2)
+                + dtheta_dyi.powi(2) * sigyi.powi(2)
+                + 2.0 * sigxyi * dtheta_dxi * dtheta_dyi;
+        }
+        slope_unc_sq /= dthdb.powi(2);
+        
+        let intercept_unc_sq = fixpt[0].powi(2) * slope_unc_sq;
+
+        [slope_unc_sq.sqrt(), intercept_unc_sq.sqrt()]
+    }
+    /// Returns the slope and intercept uncertainty as an array.
+
     /// Uncertainty calculation without a fixed point.
     ///
     /// Returns the slope and intercept uncertainties as an array.
@@ -214,10 +284,9 @@ pub mod regression {
             + 4.0
                 * (weights.mapv(|x: f64| x.powi(3))
                     * (sigxy - slope * &sigx_sq)
-                    * (slope.powi(2)
-                    * (&u_all * &v_all * &sigx_sq - &u_all_sq * sigxy)
-                    + slope * (&u_all_sq * &sigy_sq - &v_all_sq * &sigx_sq)
-                    - (&u_all * &v_all * &sigy_sq - &v_all_sq * sigxy)))
+                    * (slope.powi(2) * (&u_all * &v_all * &sigx_sq - &u_all_sq * sigxy)
+                        + slope * (&u_all_sq * &sigy_sq - &v_all_sq * &sigx_sq)
+                        - (&u_all * &v_all * &sigy_sq - &v_all_sq * sigxy)))
                     .sum()
             + 2.0
                 * (&weights_sq
@@ -259,7 +328,7 @@ pub mod regression {
                     * (slope.powi(2) * &u_all[jt] * &sigx_sq[jt]
                         - 2.0 * slope * &v_all[jt] * &sigx_sq[jt]
                         - &u_all[jt] * &sigy_sq[jt]
-                    + 2.0 * &v_all[jt] * sigxy[jt]);
+                        + 2.0 * &v_all[jt] * sigxy[jt]);
             }
             sum_all
         };

@@ -87,8 +87,8 @@ fn test_uncorrelated_set1() {
 fn test_correlated_with_fixed_point_set1() {
     let (xdat, sigx, ydat, sigy, rho, fixpt) = get_data();
 
-    let slope_exp = [-0.0808424308784813, 0.0];
-    let intercept_exp = [0.00380842430878481, 0.0];
+    let slope_exp = [-0.0808424308784813, 0.00222209076123286];
+    let intercept_exp = [0.00380842430878481, 2.22209076123286E-05];
     let mswd_exp = 0.911015001888297;
 
     let data = Data {
