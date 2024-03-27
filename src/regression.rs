@@ -45,19 +45,43 @@ pub mod regression {
             None => None,
         };
 
-        // Calculate the slope of the linear fit
-        let slope = [
-            calculate_slope(&xdat, &sigx, &ydat, &sigy, &sigxy, &fixpt)?,
-            0.0,
-        ];
+        // Calculate all quantities for the linear fit
+        let (slope, xbar, ybar, weights) =
+            calculate_slope(&xdat, &sigx, &ydat, &sigy, &sigxy, &fixpt)?;
+        let intercept = ybar - slope * xbar;
+        let mswd = calculate_mswd(&xdat, &ydat, slope, intercept, &weights, &fixpt);
+        let [slope_unc, intercept_unc] = match fixpt {
+            Some(_) => [0.0, 0.0],
+            None => unc_calc_no_fixpt(
+                &xdat, &sigx, &ydat, &sigy, &sigxy, slope, xbar, ybar, &weights,
+            ),
+        };
 
         let result = LinearFit {
-            slope,
-            intercept: [0.0, 0.0],
-            mswd: 0.0,
+            slope: [slope, slope_unc],
+            intercept: [intercept, intercept_unc],
+            mswd,
         };
 
         Ok(result)
+    }
+
+    /// Calculate MSWD of the linear regression.
+    fn calculate_mswd(
+        xdat: &Array1<f64>,
+        ydat: &Array1<f64>,
+        slope: f64,
+        intercept: f64,
+        weights: &Array1<f64>,
+        fixpt: &Option<Array1<f64>>,
+    ) -> f64 {
+        let chi_square =
+            (weights * (ydat - slope * xdat - intercept).mapv(|x: f64| x.powi(2))).sum();
+        let dof = match fixpt {
+            Some(_) => xdat.len() - 1,
+            None => xdat.len() - 2,
+        };
+        chi_square / dof as f64
     }
 
     /// Calculate the slope fully considering the uncertainties
@@ -68,7 +92,7 @@ pub mod regression {
         sigy: &Array1<f64>,
         sigxy: &Array1<f64>,
         fixpt: &Option<Array<f64, Ix1>>,
-    ) -> Result<f64, String> {
+    ) -> Result<(f64, f64, f64, Array1<f64>), String> {
         let sigx_sq = sigx.mapv(|x: f64| x.powi(2));
         let sigy_sq = sigy.mapv(|x: f64| x.powi(2));
 
@@ -104,7 +128,8 @@ pub mod regression {
                     .sum()
         };
 
-        let regression_limit = 0.0; // fixme: change for Opt in struct - maybe
+        let regression_limit = 1e-10; // fixme: change for Opt in struct - maybe
+        // fixme: Can set this to zero for some, but not for everything! Check w/ all datasets.
 
         let mut iter_count: usize = 0;
         let mut slope_old = initial_guesses_slope(xdat, ydat)?;
@@ -121,9 +146,10 @@ pub mod regression {
             }
         }
 
-        println!("Iter count: {}", iter_count);
-
-        Ok(slope_new)
+        let weights = calc_weights(slope_new);
+        let xbar = calc_xbar(&weights);
+        let ybar = calc_ybar(&weights);
+        Ok((slope_new, xbar, ybar, weights))
     }
 
     /// Simple linear regression to calculate the slope and intercept of a line.
@@ -141,6 +167,132 @@ pub mod regression {
         let slope = (n as f64 * sum_xy - sum_x * sum_y) / (n as f64 * sum_x2 - sum_x.powi(2));
 
         Ok(slope)
+    }
+
+    /// Kronecker delta function.
+    fn kron_delta(i: usize, j: usize) -> f64 {
+        if i == j {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    /// Uncertainty calculation without a fixed point.
+    ///
+    /// Returns the slope and intercept uncertainties as an array.
+    fn unc_calc_no_fixpt(
+        xdat: &Array1<f64>,
+        sigx: &Array1<f64>,
+        ydat: &Array1<f64>,
+        sigy: &Array1<f64>,
+        sigxy: &Array1<f64>,
+        slope: f64,
+        xbar: f64,
+        ybar: f64,
+        weights: &Array1<f64>,
+    ) -> [f64; 2] {
+        let u_all = xdat - xbar;
+        let v_all = ydat - ybar;
+
+        let sigx_sq = sigx.mapv(|x: f64| x.powi(2));
+        let sigy_sq = sigy.mapv(|x: f64| x.powi(2));
+        let weights_sq = weights.mapv(|x: f64| x.powi(2));
+        let weights_sum = weights.sum();
+        let u_all_sq = u_all.mapv(|x: f64| x.powi(2));
+        let v_all_sq = v_all.mapv(|x: f64| x.powi(2));
+
+        // sum over j in equation 60, last two lines
+        let sum_j_u = (&weights_sq * &u_all * (sigxy - slope * &sigx_sq)).sum();
+        let sum_j_v = (&weights_sq * &v_all * (sigxy - slope * &sigx_sq)).sum();
+
+        // d(theta) / db derivative
+        let dthdb = (&weights_sq
+            * (2.0 * slope * (&u_all * &v_all * &sigx_sq - &u_all_sq * sigxy)
+                + (&u_all_sq * &sigy_sq - &v_all_sq * &sigx_sq)))
+            .sum()
+            + 4.0
+                * (weights.mapv(|x: f64| x.powi(3))
+                    * (sigxy - slope * &sigx_sq)
+                    * (slope.powi(2)
+                    * (&u_all * &v_all * &sigx_sq - &u_all_sq * sigxy)
+                    + slope * (&u_all_sq * &sigy_sq - &v_all_sq * &sigx_sq)
+                    - (&u_all * &v_all * &sigy_sq - &v_all_sq * sigxy)))
+                    .sum()
+            + 2.0
+                * (&weights_sq
+                    * (-slope.powi(2) * &u_all * &sigx_sq
+                        + 2.0 * slope * &v_all * &sigx_sq
+                        + &u_all * &sigy_sq
+                        - 2.0 * &v_all * sigxy))
+                    .sum()
+                * &sum_j_v
+                / &weights_sum
+            + 2.0
+                * (&weights_sq
+                    * (-slope.powi(2) * &v_all * &sigx_sq + 2.0 * slope.powi(2) * &u_all * sigxy
+                        - 2.0 * slope * &u_all * &sigy_sq
+                        + &v_all * &sigy_sq))
+                    .sum()
+                * &sum_j_u
+                / &weights_sum;
+
+        let calc_dtheta_dxi = |it: usize| -> f64 {
+            let mut sum_all = 0.0;
+            for (jt, weight_jt) in weights.indexed_iter() {
+                let kron = kron_delta(it, jt);
+                sum_all += weight_jt.powi(2)
+                    * (kron - weights[it] / weights_sum)
+                    * (slope.powi(2) * &v_all[jt] * &sigx_sq[jt]
+                        - slope.powi(2) * 2.0 * &u_all[jt] * sigxy[jt]
+                        + 2.0 * slope * &u_all[jt] * &sigy_sq[jt]
+                        - &v_all[jt] * &sigy_sq[jt]);
+            }
+            sum_all
+        };
+        let calc_dtheta_dyi = |it: usize| -> f64 {
+            let mut sum_all = 0.0;
+            for (jt, weight_jt) in weights.indexed_iter() {
+                let kron = kron_delta(it, jt);
+                sum_all += weight_jt.powi(2)
+                    * (kron - weights[it] / weights_sum)
+                    * (slope.powi(2) * &u_all[jt] * &sigx_sq[jt]
+                        - 2.0 * slope * &v_all[jt] * &sigx_sq[jt]
+                        - &u_all[jt] * &sigy_sq[jt]
+                    + 2.0 * &v_all[jt] * sigxy[jt]);
+            }
+            sum_all
+        };
+        let calc_da_dxi = |it: usize| -> f64 {
+            -slope * weights[it] / weights_sum - xbar * calc_dtheta_dxi(it) / dthdb
+        };
+        let calc_da_dyi =
+            |it: usize| -> f64 { weights[it] / weights_sum - xbar * calc_dtheta_dyi(it) / dthdb };
+
+        let mut slope_unc_sq = 0.0;
+        for (it, sigxi) in sigx.indexed_iter() {
+            let sigyi = sigy[it];
+            let sigxyi = sigxy[it];
+            let dtheta_dxi = calc_dtheta_dxi(it);
+            let dtheta_dyi = calc_dtheta_dyi(it);
+            slope_unc_sq += dtheta_dxi.powi(2) * sigxi.powi(2)
+                + dtheta_dyi.powi(2) * sigyi.powi(2)
+                + 2.0 * sigxyi * dtheta_dxi * dtheta_dyi;
+        }
+        slope_unc_sq /= dthdb.powi(2);
+
+        let mut intercept_unc_sq = 0.0;
+        for (it, sigxi) in sigx.indexed_iter() {
+            let sigyi = sigy[it];
+            let sigxyi = sigxy[it];
+            let da_dxi = calc_da_dxi(it);
+            let da_dyi = calc_da_dyi(it);
+            intercept_unc_sq += da_dxi.powi(2) * sigxi.powi(2)
+                + da_dyi.powi(2) * sigyi.powi(2)
+                + 2.0 * sigxyi * da_dxi * da_dyi;
+        }
+
+        [slope_unc_sq.sqrt(), intercept_unc_sq.sqrt()]
     }
 
     #[cfg(test)]
@@ -164,6 +316,13 @@ pub mod regression {
             let ydat = array![2.1, 2.9, 4.2, 5.1, 5.7];
             let test = initial_guesses_slope(&xdat, &ydat).unwrap();
             assert_relative_eq!(test, 0.94);
+        }
+
+        #[test]
+        fn test_kron_delta() {
+            assert_eq!(kron_delta(1, 1), 1.0);
+            assert_eq!(kron_delta(1, 2), 0.0);
+            assert_eq!(kron_delta(3, 2), 0.0);
         }
 
         // fixme: remove
