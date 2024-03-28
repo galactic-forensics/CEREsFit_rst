@@ -4,7 +4,7 @@ extern crate ndarray;
 
 mod regression;
 
-pub use regression::regression::linear_fit;
+pub use regression::linear_fit;
 
 /// Data structure.
 ///
@@ -77,7 +77,6 @@ impl fmt::Display for LinearFit {
         )
     }
 }
-
 
 #[cfg(test)]
 mod tests {

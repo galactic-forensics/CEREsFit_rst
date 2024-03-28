@@ -1,5 +1,4 @@
 // Integration test for Set 1 data of paper
-
 use approx::assert_relative_eq;
 use ceresfit::{linear_fit, Data};
 
