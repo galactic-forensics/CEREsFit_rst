@@ -1,6 +1,7 @@
 use std::fmt;
 
 extern crate ndarray;
+use ndarray::Array1;
 
 mod regression;
 
@@ -9,7 +10,8 @@ pub use regression::linear_fit;
 /// Data structure.
 ///
 /// In order to perform a linear fit, you must package your data as a `Data` struct. The following
-/// list provides an overview of the fields:
+/// list provides an overview of the fields, which all need to be given as one dimensional
+/// `ndarray::Array1<f64>` vectors.
 ///
 /// - `xdat`: x-data
 /// - `sigx`: 1 sigma uncertainties of your x-data
@@ -26,11 +28,12 @@ pub use regression::linear_fit;
 ///
 /// ```
 /// use ceresfit::Data;
+/// use ndarray::array;
 ///
-/// let xdat = vec![1., 2., 3.];
-/// let sigx = vec![0.1, 0.02, 0.32];
-/// let ydat = vec![20., 25.4, 32.9];
-/// let sigy = vec![1.2, 2.4, 0.13];
+/// let xdat = array![1., 2., 3.];
+/// let sigx = array![0.1, 0.02, 0.32];
+/// let ydat = array![20., 25.4, 32.9];
+/// let sigy = array![1.2, 2.4, 0.13];
 /// let rho = None;
 /// let fixpt = None;
 ///
@@ -43,12 +46,12 @@ pub use regression::linear_fit;
 ///     fixpt
 /// };
 pub struct Data {
-    pub xdat: Vec<f64>,
-    pub sigx: Vec<f64>,
-    pub ydat: Vec<f64>,
-    pub sigy: Vec<f64>,
-    pub rho: Option<Vec<f64>>,
-    pub fixpt: Option<Vec<f64>>,
+    pub xdat: Array1<f64>,
+    pub sigx: Array1<f64>,
+    pub ydat: Array1<f64>,
+    pub sigy: Array1<f64>,
+    pub rho: Option<Array1<f64>>,
+    pub fixpt: Option<Array1<f64>>,
 }
 
 /// LinearFit structure that holds the results.
