@@ -4,13 +4,12 @@ use ndarray::prelude::*;
 
 use ceresfit::Data;
 
-fn get_data() -> Data
- {
+fn get_data() -> Data {
     let xdat = array![0.037, 0.035, 0.032, 0.04, 0.013, 0.038, 0.042, 0.03];
     let sigx = array![0.00111, 0.00105, 0.00096, 0.0012, 0.00039, 0.00114, 0.00126, 0.0009,];
     let ydat = array![0.0008, 0.00084, 0.001, 0.00085, 0.0027, 0.00071, 0.00043, 0.0016,];
     let sigy = array![0.00008, 0.000084, 0.0001, 0.000085, 0.00027, 0.000071, 0.000043, 0.00016,];
-    
+
     #[allow(clippy::approx_constant)]
     let rho = array![
         0.707106781186548,
@@ -23,7 +22,7 @@ fn get_data() -> Data
         0.707106781186548,
     ];
     let fixpt = array![0.01, 0.003];
-     
+
     Data {
         xdat,
         sigx,

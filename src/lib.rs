@@ -1,9 +1,40 @@
+//! # ceresfit
+//!
+//! CEREsFit (Correlated Errors Regression Estimate Fit)
+//! is a Rust library that provides linear regressions of data sets
+//! with correlated uncertainties.
+//! The library is based following the methodology published by
+//! Stephan and Trappitsch (2023), doi: 10.1016/j.ijms.2023.117053
+//!
+//! The library makes heavy use of `ndarray` for data handling.
+//! We provide a `Data` structure that holds the data and uncertainties as well as a
+//! `LinearFit` structure that holds the results of the linear regression.
+//!
+//! # Example
+//!
+//! ```
+//! use ceresfit::Data;
+//! use ndarray::prelude::*;
+//!
+//! let my_data = Data {
+//!     xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+//!     sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+//!     ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+//!     sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+//!     rho: None,
+//!     fixpt: None,
+//! };
+//!
+//! let result = my_data.linear_fit().unwrap();
+//!
+//! println!("{}", result);
+//! ```
+
 use std::fmt;
 
 mod regression;
 
 pub use regression::Data;
-
 
 /// LinearFit structure that holds the results.
 ///
@@ -33,7 +64,7 @@ pub use regression::Data;
 ///
 /// assert_eq!(result.slope[0], 1.0);
 /// assert_eq!(result.intercept[0], 0.0);
-/// 
+///
 /// // Pretty print the results
 /// println!("{}", result);
 /// ```
