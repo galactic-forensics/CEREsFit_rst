@@ -2,7 +2,7 @@
 use approx::assert_relative_eq;
 use ndarray::prelude::*;
 
-use ceresfit::{linear_fit, Data};
+use ceresfit::Data;
 
 fn get_data() -> Data
  {
@@ -44,7 +44,7 @@ fn test_correlated_set1() {
     let intercept_exp = [0.00368416060914567, 0.00037524641619794];
     let mswd_exp = 1.04431697859327;
 
-    let result = linear_fit(&data).unwrap();
+    let result = data.linear_fit().unwrap();
 
     assert_relative_eq!(slope_exp[0], result.slope[0], epsilon = 1e-10);
     assert_relative_eq!(slope_exp[1], result.slope[1], epsilon = 1e-10);
@@ -64,7 +64,7 @@ fn test_uncorrelated_set1() {
     let intercept_exp = [0.00364110802078184, 0.000349049456994308];
     let mswd_exp = 1.73032125998902;
 
-    let result = linear_fit(&data).unwrap();
+    let result = data.linear_fit().unwrap();
 
     assert_relative_eq!(slope_exp[0], result.slope[0], epsilon = 1e-10);
     assert_relative_eq!(slope_exp[1], result.slope[1], epsilon = 1e-10);
@@ -82,7 +82,7 @@ fn test_correlated_with_fixed_point_set1() {
     let intercept_exp = [0.00380842430878481, 2.22209076123286E-05];
     let mswd_exp = 0.911015001888297;
 
-    let result = linear_fit(&data).unwrap();
+    let result = data.linear_fit().unwrap();
 
     assert_relative_eq!(slope_exp[0], result.slope[0], epsilon = 1e-10);
     assert_relative_eq!(slope_exp[1], result.slope[1], epsilon = 1e-10);

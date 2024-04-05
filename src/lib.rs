@@ -1,58 +1,9 @@
 use std::fmt;
 
-extern crate ndarray;
-use ndarray::Array1;
-
 mod regression;
 
-pub use regression::linear_fit;
+pub use regression::Data;
 
-/// Data structure.
-///
-/// In order to perform a linear fit, you must package your data as a `Data` struct. The following
-/// list provides an overview of the fields, which all need to be given as one dimensional
-/// `ndarray::Array1<f64>` vectors.
-///
-/// - `xdat`: x-data
-/// - `sigx`: 1 sigma uncertainties of your x-data
-/// - `ydat`: y-data
-/// - `sigy`: 1 sigma uncertainties of your y-data
-/// - `rho`: Optional list of correlation coefficients for between each individual x,y data point
-/// - `fixpt`: Optional fix point through which to force the regression, given as a `Vec[x, y]`,
-///         where `x` and `y` are the respective coordinates to force the fit through.
-///
-/// Except for `fixpt`, which must be a vector of length 2, all other vectors must contain,
-/// if provided, the same number of values.
-///
-/// # Example:
-///
-/// ```
-/// use ceresfit::Data;
-/// use ndarray::array;
-///
-/// let xdat = array![1., 2., 3.];
-/// let sigx = array![0.1, 0.02, 0.32];
-/// let ydat = array![20., 25.4, 32.9];
-/// let sigy = array![1.2, 2.4, 0.13];
-/// let rho = None;
-/// let fixpt = None;
-///
-/// let my_data = Data {
-///     xdat,
-///     sigx,
-///     ydat,
-///     sigy,
-///     rho,
-///     fixpt
-/// };
-pub struct Data {
-    pub xdat: Array1<f64>,
-    pub sigx: Array1<f64>,
-    pub ydat: Array1<f64>,
-    pub sigy: Array1<f64>,
-    pub rho: Option<Array1<f64>>,
-    pub fixpt: Option<Array1<f64>>,
-}
 
 /// LinearFit structure that holds the results.
 ///
@@ -64,7 +15,28 @@ pub struct Data {
 ///
 /// # Example
 ///
-/// todo
+/// ```
+/// use ceresfit::Data;
+/// use ndarray::prelude::*;
+///
+/// let my_data = Data {
+///     xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+///     sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+///     ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+///     sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+///     rho: None,
+///     fixpt: None,
+/// };
+///
+/// let result = my_data.linear_fit().unwrap();
+///
+///
+/// assert_eq!(result.slope[0], 1.0);
+/// assert_eq!(result.intercept[0], 0.0);
+/// 
+/// // Pretty print the results
+/// println!("{}", result);
+/// ```
 pub struct LinearFit {
     pub slope: [f64; 2],
     pub intercept: [f64; 2],
