@@ -477,6 +477,23 @@ mod tests {
         assert_eq!(kron_delta(3, 2), 0.0);
     }
 
+    #[test]
+    fn test_uncertainty_band_sigma() {
+        let mut data = Data {
+            xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            rho: None,
+            fixpt: None,
+        };
+        let unc_exp = data.uncertainty_band(Some(1.0), None, None);
+        let unc_rec = data.uncertainty_band(None, None, None);
+        assert_eq!(unc_exp.x, unc_rec.x);
+        assert_eq!(unc_exp.y_ub_min, unc_rec.y_ub_min);
+        assert_eq!(unc_exp.y_ub_max, unc_rec.y_ub_max);
+    }
+
     // fixme: remove
     #[test]
     fn test_ndarray_tmp() {

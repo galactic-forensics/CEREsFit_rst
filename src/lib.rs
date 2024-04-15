@@ -30,8 +30,8 @@
 //! println!("{}", result);
 //! ```
 
-use std::fmt;
 use ndarray::Array1;
+use std::fmt;
 
 mod regression;
 
