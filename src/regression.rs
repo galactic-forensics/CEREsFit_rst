@@ -1,7 +1,7 @@
 /// Module for linear regression calculations.
 use ndarray::prelude::*;
 
-use crate::LinearFit;
+use crate::{LinearFit, UncertaintyBand};
 
 /// Data structure.
 ///
@@ -103,6 +103,57 @@ impl Data {
         };
 
         Ok(result)
+    }
+
+    pub fn uncertainty_band(
+        &mut self,
+        sigma: Option<f64>,
+        bins: Option<usize>,
+        xrange: Option<&Array1<f64>>,
+    ) -> UncertaintyBand {
+        let xrange_return = match xrange {
+            Some(x) => x.clone(),
+            None => {
+                let num_bins = bins.unwrap_or_else(|| 100);
+                let min_x = *self
+                    .xdat
+                    .iter()
+                    .min_by(|x, y| x.partial_cmp(y).unwrap())
+                    .unwrap();
+                let max_x = *self
+                    .xdat
+                    .iter()
+                    .max_by(|x, y| x.partial_cmp(y).unwrap())
+                    .unwrap();
+                Array1::linspace(min_x, max_x, num_bins)
+            }
+        };
+
+        let mut y_ub: Array1<f64> = Array1::zeros(xrange_return.len());
+
+        // save the current xdat
+        let xdat_save = self.xdat.clone();
+
+        for (it, deltax) in xrange_return.iter().enumerate() {
+            self.xdat = xdat_save.mapv(|x: f64| x - deltax);
+            let result = self.linear_fit().unwrap();
+            y_ub[it] = result.intercept[1];
+        }
+
+        y_ub *= sigma.unwrap_or(1.0);
+
+        // write the saved xdat back
+        self.xdat = xdat_save;
+        let result = self.linear_fit().unwrap();
+
+        let y_ub_min = &xrange_return * result.slope[0] + result.intercept[0] - &y_ub;
+        let y_ub_max = &xrange_return * result.slope[0] + result.intercept[0] - &y_ub;
+
+        UncertaintyBand {
+            x: xrange_return,
+            y_ub_min,
+            y_ub_max,
+        }
     }
 
     /// Calculate MSWD of the linear regression.

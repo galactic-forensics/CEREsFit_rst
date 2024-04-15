@@ -31,6 +31,7 @@
 //! ```
 
 use std::fmt;
+use ndarray::Array1;
 
 mod regression;
 
@@ -83,6 +84,14 @@ impl fmt::Display for LinearFit {
         )
     }
 }
+
+pub struct UncertaintyBand {
+    pub x: Array1<f64>,
+    pub y_ub_min: Array1<f64>,
+    pub y_ub_max: Array1<f64>,
+}
+
+// todo add docs, impl. Display for UncertaintyBand
 
 #[cfg(test)]
 mod tests {
