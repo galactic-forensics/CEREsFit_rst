@@ -85,13 +85,51 @@ impl fmt::Display for LinearFit {
     }
 }
 
+/// UncertaintyBand structure that holds the results of an uncertainty band calculation.
+///
+/// The UncertaintyBand structure holds three fields: `x`, `y_ub_min`, and `y_ub_max`. `x` is an
+/// array of `f64` values representing the x-values of the uncertainty band. `y_ub_min` and
+/// `y_ub_max` are arrays of `f64` values representing the lower and upper bounds of the
+/// uncertainty band, respectively. In order to plot the uncertainty band, use the `x` values as
+/// the x-axis and the `y_ub_min` and `y_ub_max` values as the y-values.
+///
+/// # Example
+///
+/// ```
+/// use ceresfit::Data;
+/// use ndarray::prelude::*;
+///
+/// let mut my_data = Data {
+///     xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+///     sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+///     ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+///     sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+///     rho: None,
+///     fixpt: None,
+/// };
+///
+/// let sigma = 1.0;
+/// let bins = 50;
+/// let result = my_data.uncertainty_band(Some(sigma), Some(bins), None);
+///
+/// assert_eq!(result.x.len(), bins);
+/// assert_eq!(result.y_ub_min.len(), bins);
+/// assert_eq!(result.y_ub_max.len(), bins);
 pub struct UncertaintyBand {
     pub x: Array1<f64>,
     pub y_ub_min: Array1<f64>,
     pub y_ub_max: Array1<f64>,
 }
 
-// todo add docs, impl. Display for UncertaintyBand
+impl fmt::Display for UncertaintyBand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "x: {}\ny_ub_min: {}\ny_ub_max: {}",
+            self.x, self.y_ub_min, self.y_ub_max
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {

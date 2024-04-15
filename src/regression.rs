@@ -478,6 +478,7 @@ mod tests {
     }
 
     #[test]
+    /// Ensure default sigma is 1.0.
     fn test_uncertainty_band_sigma() {
         let mut data = Data {
             xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
@@ -495,6 +496,7 @@ mod tests {
     }
 
     #[test]
+    /// Ensure uncertainty band has correct number of x values.
     fn test_uncertainty_band_xrange() {
         let mut data = Data {
             xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
@@ -512,6 +514,7 @@ mod tests {
     }
 
     #[test]
+    /// Ensure uncertainty band has correct number of bins.
     fn test_uncertainty_band_bins() {
         let mut data = Data {
             xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
@@ -527,6 +530,22 @@ mod tests {
         assert_eq!(unc_exp.y_ub_max.len(), 10);
     }
 
+    #[test]
+    /// Ensure uncertainty band sets data back properly.
+    fn test_uncertainty_band_set_back() {
+        let mut data = Data {
+            xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            rho: None,
+            fixpt: None,
+        };
+        let xdat_exp = data.xdat.clone();
+        let _ = data.uncertainty_band(Some(1.0), None, None);
+        assert_eq!(data.xdat, xdat_exp);
+    }
+    
     // fixme: remove
     #[test]
     fn test_ndarray_tmp() {
