@@ -114,7 +114,7 @@ impl Data {
         let xrange_return = match xrange {
             Some(x) => x.clone(),
             None => {
-                let num_bins = bins.unwrap_or_else(|| 100);
+                let num_bins = bins.unwrap_or(100);
                 let min_x = *self
                     .xdat
                     .iter()
@@ -492,6 +492,39 @@ mod tests {
         assert_eq!(unc_exp.x, unc_rec.x);
         assert_eq!(unc_exp.y_ub_min, unc_rec.y_ub_min);
         assert_eq!(unc_exp.y_ub_max, unc_rec.y_ub_max);
+    }
+
+    #[test]
+    fn test_uncertainty_band_xrange() {
+        let mut data = Data {
+            xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            rho: None,
+            fixpt: None,
+        };
+        let xrange = array![1.0, 2.0, 3.0, 4.0, 5.0];
+        let unc_exp = data.uncertainty_band(Some(1.0), None, Some(&xrange));
+        assert_eq!(unc_exp.x, xrange);
+        assert_eq!(unc_exp.y_ub_min.len(), xrange.len());
+        assert_eq!(unc_exp.y_ub_max.len(), xrange.len());
+    }
+
+    #[test]
+    fn test_uncertainty_band_bins() {
+        let mut data = Data {
+            xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            rho: None,
+            fixpt: None,
+        };
+        let unc_exp = data.uncertainty_band(Some(1.0), Some(10), None);
+        assert_eq!(unc_exp.x.len(), 10);
+        assert_eq!(unc_exp.y_ub_min.len(), 10);
+        assert_eq!(unc_exp.y_ub_max.len(), 10);
     }
 
     // fixme: remove
