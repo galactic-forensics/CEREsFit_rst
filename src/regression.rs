@@ -1,4 +1,5 @@
 /// Module for linear regression calculations.
+use distrs::StudentsT;
 use ndarray::prelude::*;
 
 use crate::{LinearFit, UncertaintyBand};
@@ -58,6 +59,51 @@ pub struct Data {
 }
 
 impl Data {
+    pub fn confidence_interval(
+        &mut self,
+        p_conf: Option<f64>,
+        bins: Option<usize>,
+        xrange: Option<&Array1<f64>>,
+    ) -> Result<UncertaintyBand, String> {
+        let p_conf = p_conf.unwrap_or(0.95);
+        let xrange_return = match xrange {
+            Some(x) => x.clone(),
+            None => {
+                let num_bins = bins.unwrap_or(100);
+                let min_x = *self
+                    .xdat
+                    .iter()
+                    .min_by(|x, y| x.partial_cmp(y).unwrap())
+                    .unwrap();
+                let max_x = *self
+                    .xdat
+                    .iter()
+                    .max_by(|x, y| x.partial_cmp(y).unwrap())
+                    .unwrap();
+                Array1::linspace(min_x, max_x, num_bins)
+            }
+        };
+
+        let unc_band = self.uncertainty_band(Some(1.0), bins, Some(&xrange_return))?;
+        let mut yax_ci = ((unc_band.y_ub_max - unc_band.y_ub_min) / 2.0).mapv(|x: f64| x.abs());
+
+        let ptmp = 1.0 - (1.0 - p_conf) / 2.0;
+        let dof: f64 = self.xdat.len() as f64 - 2.0;
+        let zfac = StudentsT::ppf(ptmp, dof);
+
+        yax_ci *= zfac;
+
+        let result = self.linear_fit()?;
+        let yax_ci_min = &xrange_return * result.slope[0] + result.intercept[0] - &yax_ci;
+        let yax_ci_max = &xrange_return * result.slope[0] + result.intercept[0] + &yax_ci;
+
+        Ok(UncertaintyBand {
+            x: xrange_return,
+            y_ub_min: yax_ci_min,
+            y_ub_max: yax_ci_max,
+        })
+    }
+
     pub fn linear_fit(&self) -> Result<LinearFit, String> {
         // Check input data
         let len_xdat = self.xdat.len();
@@ -103,57 +149,6 @@ impl Data {
         };
 
         Ok(result)
-    }
-
-    pub fn uncertainty_band(
-        &mut self,
-        sigma: Option<f64>,
-        bins: Option<usize>,
-        xrange: Option<&Array1<f64>>,
-    ) -> UncertaintyBand {
-        let xrange_return = match xrange {
-            Some(x) => x.clone(),
-            None => {
-                let num_bins = bins.unwrap_or(100);
-                let min_x = *self
-                    .xdat
-                    .iter()
-                    .min_by(|x, y| x.partial_cmp(y).unwrap())
-                    .unwrap();
-                let max_x = *self
-                    .xdat
-                    .iter()
-                    .max_by(|x, y| x.partial_cmp(y).unwrap())
-                    .unwrap();
-                Array1::linspace(min_x, max_x, num_bins)
-            }
-        };
-
-        let mut y_ub: Array1<f64> = Array1::zeros(xrange_return.len());
-
-        // save the current xdat
-        let xdat_save = self.xdat.clone();
-
-        for (it, deltax) in xrange_return.iter().enumerate() {
-            self.xdat = xdat_save.mapv(|x: f64| x - deltax);
-            let result = self.linear_fit().unwrap();
-            y_ub[it] = result.intercept[1];
-        }
-
-        y_ub *= sigma.unwrap_or(1.0);
-
-        // write the saved xdat back
-        self.xdat = xdat_save;
-        let result = self.linear_fit().unwrap();
-
-        let y_ub_min = &xrange_return * result.slope[0] + result.intercept[0] - &y_ub;
-        let y_ub_max = &xrange_return * result.slope[0] + result.intercept[0] - &y_ub;
-
-        UncertaintyBand {
-            x: xrange_return,
-            y_ub_min,
-            y_ub_max,
-        }
     }
 
     /// Calculate MSWD of the linear regression.
@@ -244,6 +239,57 @@ impl Data {
         let slope = (n as f64 * sum_xy - sum_x * sum_y) / (n as f64 * sum_x2 - sum_x.powi(2));
 
         Ok(slope)
+    }
+
+    pub fn uncertainty_band(
+        &mut self,
+        sigma: Option<f64>,
+        bins: Option<usize>,
+        xrange: Option<&Array1<f64>>,
+    ) -> Result<UncertaintyBand, String> {
+        let xrange_return = match xrange {
+            Some(x) => x.clone(),
+            None => {
+                let num_bins = bins.unwrap_or(100);
+                let min_x = *self
+                    .xdat
+                    .iter()
+                    .min_by(|x, y| x.partial_cmp(y).unwrap())
+                    .unwrap();
+                let max_x = *self
+                    .xdat
+                    .iter()
+                    .max_by(|x, y| x.partial_cmp(y).unwrap())
+                    .unwrap();
+                Array1::linspace(min_x, max_x, num_bins)
+            }
+        };
+
+        let mut y_ub: Array1<f64> = Array1::zeros(xrange_return.len());
+
+        // save the current xdat
+        let xdat_save = self.xdat.clone();
+
+        for (it, deltax) in xrange_return.iter().enumerate() {
+            self.xdat = xdat_save.mapv(|x: f64| x - deltax);
+            let result = self.linear_fit()?;
+            y_ub[it] = result.intercept[1];
+        }
+
+        y_ub *= sigma.unwrap_or(1.0);
+
+        // write the saved xdat back
+        self.xdat = xdat_save;
+        let result = self.linear_fit()?;
+
+        let y_ub_min = &xrange_return * result.slope[0] + result.intercept[0] - &y_ub;
+        let y_ub_max = &xrange_return * result.slope[0] + result.intercept[0] - &y_ub;
+
+        Ok(UncertaintyBand {
+            x: xrange_return,
+            y_ub_min,
+            y_ub_max,
+        })
     }
 
     /// Uncertainty calculation with a fixed point
@@ -478,6 +524,22 @@ mod tests {
     }
 
     #[test]
+    fn test_confidence_interval() {
+        let mut data = Data {
+            xdat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigx: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            ydat: array![1.0, 2.0, 3.0, 4.0, 5.0],
+            sigy: array![0.1, 0.1, 0.1, 0.1, 0.1],
+            rho: None,
+            fixpt: None,
+        };
+        let result = data.confidence_interval(Some(0.95), None, None).unwrap();
+        assert_eq!(result.x.len(), 100);
+        assert_eq!(result.y_ub_min.len(), 100);
+        assert_eq!(result.y_ub_max.len(), 100);
+    }
+
+    #[test]
     /// Ensure default sigma is 1.0.
     fn test_uncertainty_band_sigma() {
         let mut data = Data {
@@ -488,8 +550,8 @@ mod tests {
             rho: None,
             fixpt: None,
         };
-        let unc_exp = data.uncertainty_band(Some(1.0), None, None);
-        let unc_rec = data.uncertainty_band(None, None, None);
+        let unc_exp = data.uncertainty_band(Some(1.0), None, None).unwrap();
+        let unc_rec = data.uncertainty_band(None, None, None).unwrap();
         assert_eq!(unc_exp.x, unc_rec.x);
         assert_eq!(unc_exp.y_ub_min, unc_rec.y_ub_min);
         assert_eq!(unc_exp.y_ub_max, unc_rec.y_ub_max);
@@ -507,7 +569,9 @@ mod tests {
             fixpt: None,
         };
         let xrange = array![1.0, 2.0, 3.0, 4.0, 5.0];
-        let unc_exp = data.uncertainty_band(Some(1.0), None, Some(&xrange));
+        let unc_exp = data
+            .uncertainty_band(Some(1.0), None, Some(&xrange))
+            .unwrap();
         assert_eq!(unc_exp.x, xrange);
         assert_eq!(unc_exp.y_ub_min.len(), xrange.len());
         assert_eq!(unc_exp.y_ub_max.len(), xrange.len());
@@ -524,7 +588,7 @@ mod tests {
             rho: None,
             fixpt: None,
         };
-        let unc_exp = data.uncertainty_band(Some(1.0), Some(10), None);
+        let unc_exp = data.uncertainty_band(Some(1.0), Some(10), None).unwrap();
         assert_eq!(unc_exp.x.len(), 10);
         assert_eq!(unc_exp.y_ub_min.len(), 10);
         assert_eq!(unc_exp.y_ub_max.len(), 10);
@@ -545,7 +609,7 @@ mod tests {
         let _ = data.uncertainty_band(Some(1.0), None, None);
         assert_eq!(data.xdat, xdat_exp);
     }
-    
+
     // fixme: remove
     #[test]
     fn test_ndarray_tmp() {

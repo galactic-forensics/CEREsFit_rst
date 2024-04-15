@@ -22,8 +22,15 @@ name = "ceresfit"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "distrs",
  "ndarray",
 ]
+
+[[package]]
+name = "distrs"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb4b4df9df7eac447b9d7c6d62011245385d2408b31e26ec5f1ad5bc96905312"
 
 [[package]]
 name = "matrixmultiply"

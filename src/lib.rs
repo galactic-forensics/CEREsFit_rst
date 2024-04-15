@@ -93,6 +93,9 @@ impl fmt::Display for LinearFit {
 /// uncertainty band, respectively. In order to plot the uncertainty band, use the `x` values as
 /// the x-axis and the `y_ub_min` and `y_ub_max` values as the y-values.
 ///
+/// The uncertainty band structure is return by the `uncertainty_band` and the `confidence_interval`
+/// methods of the `Data` structure.
+///
 /// # Example
 ///
 /// ```
@@ -110,7 +113,7 @@ impl fmt::Display for LinearFit {
 ///
 /// let sigma = 1.0;
 /// let bins = 50;
-/// let result = my_data.uncertainty_band(Some(sigma), Some(bins), None);
+/// let result = my_data.uncertainty_band(Some(sigma), Some(bins), None).unwrap();
 ///
 /// assert_eq!(result.x.len(), bins);
 /// assert_eq!(result.y_ub_min.len(), bins);
